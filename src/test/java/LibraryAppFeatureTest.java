@@ -100,8 +100,13 @@ public class LibraryAppFeatureTest {
         }
 
         @Override
-        public void afterDelayArrangementComplete(Book book, long delay) {
-            super.afterDelayArrangementComplete(book, delay);
+        public void afterDelayArrangementCompleteWithThreadPool(Book book, long delay) {
+            super.afterDelayArrangementCompleteWithThreadPool(book, delay);
+        }
+
+        @Override
+        public void afterDelayArrangementCompleteWithThread(CountDownLatch latch, Book book, long delay) {
+            super.afterDelayArrangementCompleteWithThread(latch, book, delay);
         }
 
         @Override

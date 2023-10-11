@@ -8,6 +8,8 @@ import dev.course.repository.BookRepository;
 import lombok.Builder;
 
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.*;
 
 public class LibraryManagement {
@@ -98,13 +100,13 @@ public class LibraryManagement {
         return CompletableFuture.runAsync(() -> {
 
             // after 5 Min, BookState is Changing 'ARRANGEMENT' To 'RENTAL_AVAILABLE'
-            afterDelayArrangementComplete(book, delay);
+            afterDelayArrangementCompleteWithThread(new CountDownLatch(1), book, delay);
         }).thenRunAsync(() -> {
             System.out.println("[System] 도서 정리가 완료되었습니다.\n");
         });
     }
 
-    public void afterDelayArrangementComplete(Book book, long delay) {
+    public void afterDelayArrangementCompleteWithThreadPool(Book book, long delay) {
 
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
 
@@ -128,6 +130,64 @@ public class LibraryManagement {
             e.printStackTrace();
         } finally {
             executorService.shutdown();
+        }
+    }
+
+    public Thread makeThreadAboutArrangement(Book book, long delay) {
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        return new Thread(() -> {
+
+            try {
+                latch.await(delay, TimeUnit.MILLISECONDS);
+                book.toStatusRentalAvailable();
+                this.bookRepository.update(book);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } finally {
+                latch.countDown();
+            }
+        });
+    }
+
+    public Thread makeThreadAboutArrangementUsingTimer(CountDownLatch latch, Book book, long delay) {
+
+        return new Thread(() -> {
+
+            Timer timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        Runnable task = () -> {
+                            book.toStatusRentalAvailable();
+                            bookRepository.update(book);
+                        };
+                        task.run();
+                    } finally {
+                        latch.countDown();
+                        timer.cancel();
+                    }
+                }
+            }, delay);
+        });
+    }
+
+
+    public void afterDelayArrangementCompleteWithThread(CountDownLatch latch, Book book, long delay) {
+
+        Thread thread = makeThreadAboutArrangementUsingTimer(latch, book, delay);
+
+        try {
+            thread.start();
+            latch.await();
+            thread.join(delay + 1000); // thread waits at MOST 'delay + 1000'
+            if (thread.isAlive()) {
+                System.out.println("[System] Task Completion Timeout! Now, Thread is Alive!");
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
